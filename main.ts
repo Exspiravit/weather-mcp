@@ -64,6 +64,31 @@ server.tool(
   }
 );
 
+server.tool(
+  "comparative-weathers",
+  "tool to compare weathers from two cities",
+  { cities: z.array(z.string()).min(2).describe("ciudades a comparar") },
+  async ({ cities }) => {
+    const results = [];
+    for (const city of cities) {
+      const response = await server.server.createMessage({
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `using tool fetch-weather{city: "${city}"`,
+            },
+          },
+        ],
+        maxTokens: 500,
+      });
+      results.push(`Clima en ${city}:\n${response.content.text}`);
+    }
+    return { content: [{ type: "text", text: results.join("\n\n") }] };
+  }
+);
+
 server.registerResource(
   "get-lat-lng-from-city",
   new ResourceTemplate("gps://{city_name}/lat-lng", { list: undefined }),

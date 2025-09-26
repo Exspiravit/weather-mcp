@@ -1,4 +1,7 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  McpServer,
+  ResourceTemplate,
+} from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
@@ -15,25 +18,35 @@ server.tool(
   "fetch-weather",
   "tool to fetch weather from a city",
   {
-    city: z.string().describe("ciudad para obtener el clima"),
+    city: z.string().optional().describe("ciudad para obtener el clima"),
+    lat_lng: z
+      .string()
+      .optional()
+      .describe("latitud y longitud de la ciudad a buscar"),
   },
-  async ({ city }) => {
-    const response = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1&language=es&format=json`
-    );
-    const data = await response.json();
+  async ({ city, lat_lng }) => {
+    let latitude = 0;
+    let longitude = 0;
+    if (!lat_lng) {
+      const response = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1&language=es&format=json`
+      );
+      const data = await response.json();
 
-    if (!data.results) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `No se encontró la ciudad ${city}.`,
-          },
-        ],
-      };
+      if (!data.results) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `No se encontró la ciudad ${city}.`,
+            },
+          ],
+        };
+      }
+      ({ latitude, longitude } = data.results[0]);
+    } else {
+      [latitude, longitude] = lat_lng.split(",").map(Number);
     }
-    const { latitude, longitude } = data.results[0];
     const weatherResponse = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
     );
@@ -44,6 +57,41 @@ server.tool(
         {
           type: "text",
           text: JSON.stringify(weatherData, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+server.registerResource(
+  "get-lat-lng-from-city",
+  new ResourceTemplate("gps://{city_name}/lat-lng", { list: undefined }),
+  {
+    title: "Latitud y Longitud a partir del nombre de la ciudad",
+    description: "City gps point from name",
+  },
+  async (uri, { city_name }) => {
+    const response = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${city_name}&count=1&language=es&format=json`
+    );
+    const data = await response.json();
+
+    if (!data.results) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No se encontró la ciudad ${city_name}.`,
+          },
+        ],
+      };
+    }
+    const { latitude, longitude } = data.results[0];
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          text: `${latitude},${longitude}`,
         },
       ],
     };

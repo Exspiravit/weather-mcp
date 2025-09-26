@@ -1,3 +1,4 @@
+import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import {
   McpServer,
   ResourceTemplate,
@@ -92,6 +93,52 @@ server.registerResource(
         {
           uri: uri.href,
           text: `${latitude},${longitude}`,
+        },
+      ],
+    };
+  }
+);
+
+server.registerPrompt(
+  "get-weather-prompt",
+  {
+    title: "Get weather information",
+    description: "Prompt to get weather information",
+    argsSchema: {
+      city: completable(z.string(), (value) => {
+        // Department suggestions
+        return ["Lima", "Cali", "Buenos Aires", "Santiago"].filter((d) =>
+          d.startsWith(value)
+        );
+      }),
+    },
+  },
+  async ({ city }) => {
+    const response = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1&language=es&format=json`
+    );
+    const data = await response.json();
+
+    if (!data.results) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No se encontró la ciudad ${city}.`,
+          },
+        ],
+      };
+    }
+    const { latitude, longitude } = data.results[0];
+
+    return {
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `Dame el clima de la ciudad ${city} en el punto gps ${latitude}, ${longitude}`,
+          },
         },
       ],
     };
